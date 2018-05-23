@@ -1,3 +1,5 @@
+# Copyright (c) 2018, Science and Technology Facilities Council
+# This software is distributed under a BSD licence. See LICENSE.txt.
 
 # Python 3 compatibility
 from __future__ import absolute_import
