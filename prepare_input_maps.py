@@ -19,7 +19,13 @@ fitted_coords = '5a1a.pdb'
 ### blur/sharpen map
 # Go into Chimera
 # Use Gaussian blurring in Chimera with e.g. sd 1.0
+# (Volume Viewer -> Tools -> Volume Filter)
+# beta-gal tested with unblurred and blurred maps, and latter slightly better
+# no robust way of estimating required blurring
 
 ### create map from coords
 # Go into Chimera
+# open command line
+# molmap #1 2.2 onGrid #0
+# where #1 is the PDB file, 2.2 is the resoluton, and the grid is taken from map file #0
 
