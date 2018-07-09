@@ -24,6 +24,8 @@ input_map_file = 'emd_2984_sdev_1_0.mrc'
 reference_map_file = 'emd_2984_from_pdb.mrc'
 # output directory for slices
 dirout = 'EM_slices_dataset_blurred_1axis'
+# index file for output slices
+index_file = 'EM_slices_dataset_blurred_1axis.idx'
 
 ### options
 #np.set_printoptions(threshold=np.inf)
@@ -37,8 +39,8 @@ offset = 10
 section_skip = 10
 # normalise values in a slice to be between map_min and map_max
 normalise = True
-#map_min = np.amin(mrc.data)
-#map_max = np.amax(mrc.data)
+minmax_auto = True
+# if minmax_auto then following manual values over-written
 map_min = -0.02
 map_max = 0.05
 # threshold for counting ref map density
@@ -52,6 +54,9 @@ good_fraction = 0.05
 print("Opening input map file ...")
 mrc = mrcfile.open(input_map_file)
 mrc.print_header()
+if minmax_auto:
+  map_min = np.amin(mrc.data)
+  map_max = np.amax(mrc.data)
 
 print("Opening reference map file ...")
 mrcref = mrcfile.open(reference_map_file)
@@ -60,6 +65,8 @@ mrcref.print_header()
 if not os.path.isdir(dirout):
   print("Creating output directory ...")
   os.mkdir(dirout)
+
+indexfile = open(index_file,'w')
 
 # loop over map data block 3 times, each time sectioning along different axis
 for axis in axes_list:
@@ -107,3 +114,9 @@ for axis in axes_list:
             img_new = img_out.convert('RGB')
             img_new.save(dirout + '/' + imgout_filename)
 
+            indexfile.write(imgout_filename+' '+axis+' '+
+                            str(row)+' '+str(row+window_size)+' '+
+                            str(col)+' '+str(col+window_size)+' '+
+                            str(section)+' '+str(section+1)+'\n')
+
+indexfile.close()
