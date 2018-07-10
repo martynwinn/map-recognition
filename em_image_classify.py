@@ -255,7 +255,7 @@ fileout = predout
 outfile = open(fileout,'w')
 print('writing predictions')
 for i in range(len(prediction)):
-    outfile.write(str(prediction[i])+str(y_test[i])+'\n')
+    outfile.write(str(prediction[i])+";"+str(y_test[i])+'\n')
     if i < 100:
         ### pillow
         if prediction[i][0] > 0.5 and y_test[i][0] > 0.5:
