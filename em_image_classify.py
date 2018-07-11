@@ -253,24 +253,39 @@ if epochs != 0:
 prediction = model.predict(x_test,batch_size=batch_size)
 fileout = predout
 outfile = open(fileout,'w')
+n_tn = 0
+n_fn = 0
+n_fp = 0
+n_tp = 0
 print('writing predictions')
 for i in range(len(prediction)):
     outfile.write(str(prediction[i])+";"+str(y_test[i])+'\n')
+    if prediction[i][0] > 0.5 and y_test[i][0] > 0.5:
+        prefix = 'TN_'
+        n_tn += 1
+    elif prediction[i][0] > 0.5 and y_test[i][1] > 0.5:
+        prefix = 'FN_'
+        n_fn += 1
+    elif prediction[i][1] > 0.5 and y_test[i][0] > 0.5:
+        prefix = 'FP_'
+        n_fp += 1
+    elif prediction[i][1] > 0.5 and y_test[i][1] > 0.5:
+        prefix = 'TP_'
+        n_tp += 1
     if i < 100:
         ### pillow
-        if prediction[i][0] > 0.5 and y_test[i][0] > 0.5:
-            prefix = 'TN_'
-        elif prediction[i][0] > 0.5 and y_test[i][1] > 0.5:
-            prefix = 'FN_'
-        elif prediction[i][1] > 0.5 and y_test[i][0] > 0.5:
-            prefix = 'FP_'
-        elif prediction[i][1] > 0.5 and y_test[i][1] > 0.5:
-            prefix = 'TP_'
         imgout_filename = 'raw_predictions/'+prefix+'2984_bl_'+str(i)+'.png'
         xout = (x_test[i]*255).astype(uint8)
         img_out = Image.fromarray(xout, 'RGB')
         img_out.save(imgout_filename)
 outfile.close()
+
+print('Number of true negatives = ',n_tn)
+print('Number of false negatives = ',n_fn)
+print('Number of false positives = ',n_fp)
+print('Number of true positives = ',n_tp)
+print('Accuracy = ',(n_tp+n_tn)/len(prediction))
+print('Precision = ',n_tp/(n_tp+n_fp))
 
 print('Metrics = ', model.metrics_names)
 
