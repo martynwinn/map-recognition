@@ -37,7 +37,7 @@ weights_out = 'model.hdf5'
 model_choice = 'custom1'
 
 # load weights from previous run?
-load_weights = True
+load_weights = False
 weights_file = 'my_results_keep/model_custom1_18750raw.hdf5'
 # use data augmentation
 data_augment = False
@@ -50,6 +50,7 @@ ch = 3
 # parameters for training
 batch_size = 32
 epochs = 5
+learning_rate = 0.001
 
 def inputTrainingImages(dirin,input_shape):
 
@@ -58,11 +59,35 @@ def inputTrainingImages(dirin,input_shape):
     # these are 1307 x 919, 8-bit/color RGBA
     # size is 1307 x 919 x 4 channels
     ##listing = os.listdir('image_dataset')
+    indexfile = open(index_file,'r').read().split("\n")
+    indexfile.pop()
+    listing = []
+    for i in indexfile:
+        i = i.split(" ")
+        listing.append(i)
+    num_samples = len(listing)
+    bad_images = listing[:]
+    good_images = []
+    counter = 0
+    for image in listing:
+        if image[0].startswith("g"):
+            good_images.append(image)
+            bad_images.remove(image)
+            counter+=1
+
+    newarray = np.random.choice(range(0,len(bad_images)),counter)
+    bad_random = []
+    for i in newarray:
+        bad_random.append(bad_images[i])
+    newlisting = good_images + bad_random
+    newindex = open("EM_slices_dataset_blurred_1axis_new.idx","w+")
+    for i in newlisting:
+        newindex.write(i[0]+" "+i[1]+" "+i[2]+" "+i[3]+" "+i[4]+" "+i[5]+" "+i[6]+" "+i[7]+"\n")
+    newindex.close()
 
     ### 2nd example
-    indexfile = open(index_file,'r')
-    listing = os.listdir(dirin)
-    num_samples = len(listing)
+    index_file2= "EM_slices_dataset_blurred_1axis_new.idx"
+    indexfile = open(index_file2,'r')
     print('number of training images = ',num_samples)
 
     # read in images, and flatten each image
@@ -140,7 +165,7 @@ class mapModel(Sequential):
         ## include_top block from VGG16
         # flatten to 1D array
         self.add(Flatten(name='flatten'))
-        self.add(Dense(1024, kernel_initializer=initializers.he_normal(), activation='relu', name='fc1'))
+        self.add(Dense(80, kernel_initializer=initializers.he_normal(), activation='relu', name='fc1'))
         #self.add(Dropout(0.5))
         self.add(Dense(2, activation='softmax', name='predictions'))
 
@@ -251,7 +276,7 @@ for layer in model.layers:
     print("  ",layer.output_shape)
 
 # initiate RMSprop optimizer
-opt = keras.optimizers.SGD(lr=0.0001)
+opt = keras.optimizers.SGD(lr=learning_rate)
 
 # Let's train the model 
 # "loss" is used in training
@@ -366,4 +391,3 @@ plt.imshow(x_train[0].reshape(rows,cols,ch))
 plt.subplot(1, 2, 2)
 plt.imshow(intermediate_output[0])
 ##plt.show()
-
