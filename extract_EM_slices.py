@@ -19,13 +19,16 @@ import mrcfile
 
 ### files
 # input map from which to extract 2D slices
-input_map_file = 'emd_2984_sdev_1_0.mrc'
+input_map_file = 'emd_7024.map'
 # reference map from fitted PDB for annotation
-reference_map_file = 'emd_2984_from_pdb.mrc'
+reference_map_file = 'emd_7024_from_pdb_prot.mrc'
+# second reference map from fitted PDB for annotation
+second_ref = True
+reference2_map_file = 'emd_7024_from_pdb_na.mrc'
 # output directory for slices
-dirout = 'EM_slices_dataset_blurred_1axis'
+dirout = 'EM_slices_1axis'
 # index file for output slices
-index_file = 'EM_slices_dataset_blurred_1axis.idx'
+index_file = 'EM_slices_1axis.idx'
 
 ### options
 #np.set_printoptions(threshold=np.inf)
@@ -62,6 +65,11 @@ print("Opening reference map file ...")
 mrcref = mrcfile.open(reference_map_file)
 mrcref.print_header()
 
+if second_ref:
+  print("Opening second reference map file ...")
+  mrcref2 = mrcfile.open(reference2_map_file)
+  mrcref2.print_header()
+
 if not os.path.isdir(dirout):
   print("Creating output directory ...")
   os.mkdir(dirout)
@@ -77,13 +85,19 @@ for axis in axes_list:
     print("transposing")
     loc_mrcdata = np.transpose(mrc.data,(1,2,0))
     loc_mrcrefdata = np.transpose(mrcref.data,(1,2,0))
+    if second_ref:
+      loc_mrcref2data = np.transpose(mrcref2.data,(1,2,0))
   elif axis in ['Y']:
     print("transposing")
     loc_mrcdata = np.transpose(mrc.data,(2,0,1))
     loc_mrcrefdata = np.transpose(mrcref.data,(2,0,1))
+    if second_ref:
+      loc_mrcref2data = np.transpose(mrcref2.data,(2,0,1))
   else:
     loc_mrcdata = mrc.data
     loc_mrcrefdata = mrcref.data
+    if second_ref:
+      loc_mrcref2data = mrcref2.data
   
   for section in range(0,loc_mrcdata.shape[2],section_skip):
 
@@ -106,7 +120,18 @@ for axis in axes_list:
             # if a fraction of grid points in reference map have significant
             # density, then label as good
             if n_ref_dens > window_size*window_size*good_fraction:
-                annotate = 'g_'
+                annotate = 'p_'
+            if second_ref:
+              n_ref2_dens = 0
+              for x in range(row,row+window_size):
+                for y in range(col,col+window_size):
+                    #print(x,y,loc_mrcref2data[x,y,section])
+                    if loc_mrcref2data[x,y,section] > ref_thresh:
+                        n_ref2_dens += 1
+              # if a fraction of grid points in reference map have significant
+              # density, then label as good
+              if n_ref2_dens > window_size*window_size*good_fraction and n_ref2_dens > n_ref_dens:
+                annotate = 'n_'
 
             # So far, myslice has the original map values. By default, the output images
             # are 8-bit, so we need to put these into the range 0 - 255. We use np.clip
