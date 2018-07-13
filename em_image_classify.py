@@ -276,7 +276,8 @@ for layer in model.layers:
     print("  ",layer.output_shape)
 
 # initiate RMSprop optimizer
-opt = keras.optimizers.SGD(lr=learning_rate)
+#opt = keras.optimizers.SGD(lr=learning_rate)
+opt = keras.optimizers.Adam(lr=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 
 # Let's train the model 
 # "loss" is used in training
