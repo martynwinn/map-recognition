@@ -24,6 +24,9 @@ from PIL import Image
 from sklearn.utils import shuffle
 import matplotlib.pyplot as plt
 
+import innvestigate
+import innvestigate.utils as iutils
+
 # directory with input slices
 dirin = 'EM_slices_dataset_blurred_1axis'
 # index file for output slices
@@ -41,6 +44,10 @@ load_weights = False
 weights_file = 'my_results_keep/model_custom1_18750raw.hdf5'
 # use data augmentation
 data_augment = False
+# map output predictions back to original volume, using segmentation files
+predictions_to_volume = False
+# run iNNvestigate for analysis
+run_innvestigate = True
 
 ### dimensions (from test image?)
 rows = 48
@@ -70,7 +77,7 @@ def inputTrainingImages(dirin,input_shape):
     good_images = []
     counter = 0
     for image in listing:
-        if image[0].startswith("g"):
+        if image[0].startswith("p"):
             good_images.append(image)
             bad_images.remove(image)
             counter+=1
@@ -80,13 +87,13 @@ def inputTrainingImages(dirin,input_shape):
     for i in newarray:
         bad_random.append(bad_images[i])
     newlisting = good_images + bad_random
-    newindex = open("EM_slices_dataset_blurred_1axis_new.idx","w+")
+    newindex = open("temp_index_file.idx","w+")
     for i in newlisting:
         newindex.write(i[0]+" "+i[1]+" "+i[2]+" "+i[3]+" "+i[4]+" "+i[5]+" "+i[6]+" "+i[7]+"\n")
     newindex.close()
 
     ### 2nd example
-    index_file2= "EM_slices_dataset_blurred_1axis_new.idx"
+    index_file2= "temp_index_file.idx"
     indexfile = open(index_file2,'r')
     print('number of training images = ',num_samples)
 
@@ -105,7 +112,7 @@ def inputTrainingImages(dirin,input_shape):
         im = words[0]
         # matplotlib converts RGB to 3*floats
         immatrix[i] = array(plt.imread(dirin + '/' + im)).flatten()
-        if im[0] == 'g':
+        if im[0] == 'p':
             label[i] = 1
             n_good += 1
         elif im[0] == 'b':
@@ -210,7 +217,7 @@ class mapVolumes():
         self.seg.attrs.create("name","predictions.seg")
         self.seg.attrs.create("map_size",(234, 234, 234))
         self.seg.attrs.create("map_level",0.0)
-        self.seg.attrs.create("map_path","C:\Users\mdw45\VirtualBox share\emd_8194.map")
+        self.seg.attrs.create("map_path", "foo.map")
         self.seg.create_dataset("region_ids", data=(1,2,3,4))
         self.seg.create_dataset("region_colors", 
                                   data=((0.517538, 0.502082, 0.749469, 1),
@@ -330,11 +337,22 @@ if epochs != 0:
 ### Now test
 prediction = model.predict(x_test,batch_size=batch_size)
 
-vis_pred = mapVolumes()
-vis_pred.initialiseSegments()
+if predictions_to_volume:
+    vis_pred = mapVolumes()
+    vis_pred.initialiseSegments()
+
+#iNNvestigate
+if run_innvestigate:
+    pre_sm_model = Model(inputs=model.input,
+                     outputs=model.get_layer('fc1').output)
+    analyzer = innvestigate.create_analyzer("guided_backprop",pre_sm_model)
 
 fileout = predout
 outfile = open(fileout,'w')
+if not os.path.isdir('raw_predictions'):
+  print("Creating raw_predictions directory ...")
+  os.mkdir('raw_predictions')
+
 n_tn = 0
 n_fn = 0
 n_fp = 0
@@ -344,19 +362,23 @@ for i in range(len(prediction)):
     outfile.write(str(prediction[i])+";"+str(y_test[i])+'\n')
     if prediction[i][0] > 0.5 and y_test[i][0] > 0.5:
         prefix = 'TN_'
-        vis_pred.updateSegmentData(pos_test[i],1)
+        if predictions_to_volume:
+            vis_pred.updateSegmentData(pos_test[i],1)
         n_tn += 1
     elif prediction[i][0] > 0.5 and y_test[i][1] > 0.5:
         prefix = 'FN_'
-        vis_pred.updateSegmentData(pos_test[i],2)
+        if predictions_to_volume:
+            vis_pred.updateSegmentData(pos_test[i],2)
         n_fn += 1
     elif prediction[i][1] > 0.5 and y_test[i][0] > 0.5:
         prefix = 'FP_'
-        vis_pred.updateSegmentData(pos_test[i],3)
+        if predictions_to_volume:
+            vis_pred.updateSegmentData(pos_test[i],3)
         n_fp += 1
     elif prediction[i][1] > 0.5 and y_test[i][1] > 0.5:
         prefix = 'TP_'
-        vis_pred.updateSegmentData(pos_test[i],4)
+        if predictions_to_volume:
+            vis_pred.updateSegmentData(pos_test[i],4)
         n_tp += 1
     if i < 100:
         ### pillow
@@ -364,8 +386,19 @@ for i in range(len(prediction)):
         xout = (x_test[i]*255).astype(uint8)
         img_out = Image.fromarray(xout, 'RGB')
         img_out.save(imgout_filename)
+        ### iNNvestigate
+        if run_innvestigate:
+            # expects batch of images
+            image = x_test[i][None, :, :, :]
+            a = analyzer.analyze(image)
+            print(a.shape)
+            analysis_filename = 'raw_predictions/'+prefix+'2984_bl_'+str(i)+'_gbp.png'
+            xout = (a[0]*255).astype(uint8)
+            img_out = Image.fromarray(xout, 'RGB')
+            img_out.save(analysis_filename)
 outfile.close()
-vis_pred.writeSegments()
+if predictions_to_volume:
+    vis_pred.writeSegments()
 
 print('Number of true negatives = ',n_tn)
 print('Number of false negatives = ',n_fn)
