@@ -11,11 +11,20 @@ import shutil
 import sys
 
 import numpy as np
+import matplotlib.pyplot as plt
 from PIL import Image as pimg
 
 # This is the CCP-EM library for i/o to MRC format map files
 # https://pypi.org/project/mrcfile/
 import mrcfile
+
+### high level options
+# second reference for multi-class problems
+second_ref = True
+# output histograms for each sub-image
+output_histogram = True
+# output individual images for classification
+output_images = False
 
 ### files
 # input map from which to extract 2D slices
@@ -23,12 +32,11 @@ input_map_file = 'emd_7024.map'
 # reference map from fitted PDB for annotation
 reference_map_file = 'emd_7024_from_pdb_prot.mrc'
 # second reference map from fitted PDB for annotation
-second_ref = True
 reference2_map_file = 'emd_7024_from_pdb_na.mrc'
 # output directory for slices
-dirout = 'EM_slices_1axis'
+dirout = 'emd_7024_slices_1axis_histo'
 # index file for output slices
-index_file = 'EM_slices_1axis.idx'
+index_file = 'emd_7024_slices_1axis_histo.idx'
 
 ### options
 #np.set_printoptions(threshold=np.inf)
@@ -98,10 +106,23 @@ for axis in axes_list:
     loc_mrcrefdata = mrcref.data
     if second_ref:
       loc_mrcref2data = mrcref2.data
+
+  # parameters for grid plots
+  grid_rows = int((loc_mrcdata.shape[0]-window_size)/offset) + 1
+  grid_cols = int((loc_mrcdata.shape[1]-window_size)/offset) + 1
+  figsize_x = grid_cols*2.0
+  figsize_y = grid_rows*2.0
   
   for section in range(0,loc_mrcdata.shape[2],section_skip):
 
     print('processing section ',section)
+    igrid = 0
+    jgrid = 0
+    # images grid
+    fig1, axs1 = plt.subplots(grid_rows,grid_cols,num=1,sharex=True,sharey=True,figsize=[figsize_x,figsize_y])
+    # histogram grid
+    if output_histogram:
+      fig2, axs2 = plt.subplots(grid_rows,grid_cols,num=2,sharex=True,sharey=True,figsize=[figsize_x,figsize_y])
 
     for col in range(0,loc_mrcdata.shape[1]-window_size,offset):
 
@@ -111,6 +132,7 @@ for axis in axes_list:
 
             # annotate
             annotate = 'b_'
+            annotate_colour = 'black'
             n_ref_dens = 0
             for x in range(row,row+window_size):
                 for y in range(col,col+window_size):
@@ -121,6 +143,7 @@ for axis in axes_list:
             # density, then label as good
             if n_ref_dens > window_size*window_size*good_fraction:
                 annotate = 'p_'
+                annotate_colour = 'blue'
             if second_ref:
               n_ref2_dens = 0
               for x in range(row,row+window_size):
@@ -132,6 +155,7 @@ for axis in axes_list:
               # density, then label as good
               if n_ref2_dens > window_size*window_size*good_fraction and n_ref2_dens > n_ref_dens:
                 annotate = 'n_'
+                annotate_colour = 'orange'
 
             # So far, myslice has the original map values. By default, the output images
             # are 8-bit, so we need to put these into the range 0 - 255. We use np.clip
@@ -141,6 +165,18 @@ for axis in axes_list:
             if normalise:
                 myslice = 255.0 * np.clip((myslice - map_min) / (map_max - map_min),0,1)
 
+            # construct histogram
+            #### np for binning?
+            #### need normalised values?
+            if output_histogram:
+              if normalise:
+                hist_min = 0.0
+                hist_max = 255.0
+              else:
+                hist_min = map_min
+                hist_max = map_max
+              (histo,edges) = np.histogram(myslice, bins=10, range=(hist_min,hist_max))
+
             ### pillow
             # output the 2D slices as standard PNG files, for input to the machine learning
             imgout_filename = annotate + '2984_bl_'+str(section)+'_'+str(col)+'_'+str(row)+axis+'.png'
@@ -149,11 +185,36 @@ for axis in axes_list:
             # This must be wasteful, but the ML I started with assumed RGB and it was
             # easiest to go with it.
             img_new = img_out.convert('RGB')
-            img_new.save(dirout + '/' + imgout_filename)
+            if output_images:
+              img_new.save(dirout + '/' + imgout_filename)
 
-            indexfile.write(imgout_filename+' '+axis+' '+
-                            str(row)+' '+str(row+window_size)+' '+
-                            str(col)+' '+str(col+window_size)+' '+
-                            str(section)+' '+str(section+1)+'\n')
+            axs1[igrid][jgrid].imshow(img_new)
+            for spine in axs1[igrid][jgrid].spines.values():
+              spine.set_edgecolor(annotate_colour)
+              spine.set_linewidth(4.0)
+            if output_histogram:
+              axs2[igrid][jgrid].bar(edges[:-1],histo,width=20,align='edge')
+              for spine in axs2[igrid][jgrid].spines.values():
+                spine.set_edgecolor(annotate_colour)
+                spine.set_linewidth(4.0)
+            jgrid += 1
+            if jgrid == grid_cols:
+              jgrid = 0
+              igrid += 1
+
+            line = imgout_filename+' '+axis+' '+str(row)+' '+str(row+window_size)+' '+str(col)+' '+str(col+window_size)+' '+str(section)+' '+str(section+1)
+            if output_histogram:
+              line = line + ' ' + ' '.join(str(h) for h in histo)
+            indexfile.write(line+'\n')
+
+    plt.figure(num=1)
+    img_plot_title = dirout + '/' + 'imgs_'+str(section)+'.png'
+    plt.savefig(img_plot_title)
+    plt.close()
+    if output_histogram:
+      plt.figure(num=2)
+      histo_plot_title = dirout + '/' + 'hists_'+str(section)+'.png'
+      plt.savefig(histo_plot_title)
+      plt.close()
 
 indexfile.close()
